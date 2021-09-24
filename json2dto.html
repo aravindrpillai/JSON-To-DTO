@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en" class="no-js">
+
+<head>
+    <title>GOSU : JSON To DTO Convertor</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
+</head>
+
+<body>
+    <h1>GOSU  : JSON To DTO Convertor</h1>
+    <div id="gallery">
+        <div>--</div>
+
+        <br>
+        <center>
+            <table style="margin-left:20px!important">
+                <tr>
+                    <td>Type</td>
+                    <td> :
+                        <select id="type" style="width:400px; height:30px;">
+                            <option value="gson">GSON Parser</option>
+                            <option value="jackson">Jackson Parser</option>
+                            <option value="none">none</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Class Suffix</td>
+                    <td> :
+                        <input type="text" value="_GRG" id="suffix" style="width:400px; height:30px;">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Package</td>
+                    <td> :
+                        <input type="text" value="json2dto.dto" id="package" style="width:400px; height:30px;">
+                    </td>
+                </tr>
+				<tr>
+                    <td></td>
+                    <td><input onclick="fileCreationEnableCheckbox(this)" type="checkbox" name="generatedto">Generate Class Files
+                    </td>
+                </tr>
+				<tr class="servlet_tr">
+                    <td>Servlet URL</td>
+                    <td> :
+                        <input type="text" value="http://localhost:8180/pc/service/create" id="serverlet_url" style="width:400px; height:30px;">
+                    </td>
+                </tr>
+				<tr class="servlet_tr">
+                    <td>DTO Location</td>
+                    <td> :
+                        <input type="text" value="C:/dev/policycenter/modules/configuration/gsrc/grg/integrations/prometrix/dto/losscost/request" id="dto_path" style="width:400px; height:30px;">
+                    </td>
+                </tr>
+				
+            </table>
+
+            <br>
+            <textarea id="textarea" rows="25" cols="168">
+{ 
+    "name":"Aravind", 
+    "age":21, 
+    "cgpa":7.289, 
+    "email":"arp@yahoo.com", 
+    "married":true, 
+    "questions":null, 
+    "vehicles":["i20","enfield","jupiter"], 
+    "marks":[10,20,30,40], 
+    "address":{ 
+        "line1":"Sreerangam", 
+        "line2":"panayamcherry", 
+        "street":"Anchal" 
+    }, 
+    "customList":{
+        "user":{"name":"aravind","dob":"1992"}, 
+        "admin":{"name":"deepu","age":24}
+    }, 
+    "innerList":[
+        {"name":"aravind","age":"21"}, 
+        {"name":"deepu","age":"2019"}
+    ] 
+}
+
+            </textarea>
+            <br>
+            <button onClick="createDTO()" style="width:400px; height:50px; background-color:#33b5e5;">Create</button>
+            <button onClick="clearSpace()" style="width:400px; height:50px;  background-color:#32b5e5;">Clear Content</button>
+        </center>
+        <br>
+
+        <div>Output</div>
+        <fieldset id="content" style="margin-left:25%; width:50%; background-color:white; color:black;">
+        </fieldset>
+        </p>
+        <div>
+
+        </div>
+        <p style="padding: 10px 20px; text-align: center;">Credits : Aravind R Pillai</p>
+
+</body>
+
+</html>
+
+<script>
+	var generatefile = false;
+    var type = "gson";
+    var objectDTOs = new Object();
+    var classes = new Object();
+    var serializationType = "";
+    var suffix = "";
+
+    var content_newline = "<br>";
+    var content_tab = "&nbsp;";
+    var content_package = "";
+    var content_import_bigdecimal = "uses java.math.BigDecimal";
+    var content_import_gson = "__bdecimal_replacement___" + content_newline + "uses gherkin.deps.com.google.gson.annotations.SerializedName" + content_newline + content_newline;
+    var content_import_jackson = "__bdecimal_replacement___" + content_newline + "uses edge.jsonmapper.JsonProperty" + content_newline + content_newline;
+    var content_import = "";
+	var payload_to_send = "";
+
+    function clearSpace() {
+        $("#content").html("");
+        objectDTOs = new Object();
+        classes = new Object();
+    }
+
+    function createDTO() {
+        $("#content").html("");
+        objectDTOs = new Object();
+        classes = new Object();
+
+        serializationType = $("#type").val();
+        suffix = $("#suffix").val();
+        content_import = serializationType == "gson" ? content_import_gson : serializationType == "none" ? "" : content_import_jackson;
+        content_package = "package " + $("#package").val() + content_newline + content_newline;
+        var jsonContent = $("#textarea").val();
+
+        var payloadObject = null;
+        try {
+            payloadObject = $.parseJSON(jsonContent);
+        } catch (err) {
+            $("#content").html("<center><br><br><b><font color='red'>JSON Payload is not proper </font><b></center>");
+            return;
+        }
+
+        objectDTOs["MasterDTO" + suffix] = payloadObject;
+
+        var exitLoop = false;
+        var content = "";
+        var dtoContentCount = 0;
+        while (1) {
+
+            for (key in objectDTOs) {
+                console.log("---> " + key);
+                content = weaveContent(key);
+				payload_to_send += (content + content_newline + content_newline + "} ___NEW_CLASS______ ");
+				
+                content += content_newline + content_newline + "}<br> <hr> <br>";
+                $("#content").append(content);
+
+                dtoContentCount = 0;
+                for (var _ in objectDTOs) dtoContentCount++;
+                if (dtoContentCount == 0) {
+                    exitLoop = true;
+                }
+                break;
+            }
+
+            if (exitLoop) {
+                break;
+            }
+        }
+		
+		if(generatefile){
+			createFile(payload_to_send);
+		}
+
+    }
+
+    function getObjectType(obj) {
+        //console.log(jQuery.type(obj));
+        switch (true) {
+            case ($.isNumeric(obj)):
+				return obj.toString().indexOf(".") != -1 ? "BigDecimal" : "int";
+			case (jQuery.type(obj) === "string"):
+                return "String";
+            case (typeof obj === "boolean"):
+                return "boolean";
+            case (jQuery.type(obj) === "array"):
+                return "List&lt;" + getObjectType(obj[0]) + "&gt;";
+            case (jQuery.type(obj) === "null"):
+                return "String";
+            default:
+                return "Object";
+        }
+    }
+
+    function formulateFieldName(name, captilize = false, suffix = false) {
+        name = name.replace(/\s/g, "");
+        if (suffix != false) {
+            name = name + suffix;
+        }
+        if (captilize) {
+            name = name.substr(0, 1).toUpperCase() + name.substr(1);
+        }
+        return name;
+    }
+
+    function getField(name, type, serializationType) {
+        var content = content_newline + content_newline;
+
+        if (serializationType == "gson") {
+            content += content_tab+"@SerializedName(\"" + name + "\")" + content_newline;
+        } else if (serializationType == "jackson") {
+            content += content_tab+"@JsonProperty" + content_newline;
+        }
+        content += content_tab+"var _" + formulateFieldName(name) + " : " + type + " as " + formulateFieldName(name, true);
+        return content;
+    }
+
+    function prepareClass(className, serializationType) {
+        var classContent = content_package;
+        if (serializationType == "gson") {
+            classContent += content_import;
+        } else if (serializationType == "jackson") {
+            classContent += content_import;
+        }
+        classContent += ("class " + className + " { ")
+        return classContent;
+    }
+
+    function weaveContent(objectDTO_Key) {
+        var payload = objectDTOs[objectDTO_Key];
+        console.log(objectDTO_Key + " ------>>> " + classes.hasOwnProperty(objectDTO_Key));
+        if (!classes.hasOwnProperty(objectDTO_Key)) {
+            classes[objectDTO_Key] = prepareClass(objectDTO_Key, "gson");
+        }
+        var type = null;
+        var fieldName = null;
+        for (key in payload) {
+            console.log(formulateFieldName(key) + " -- " + payload[key] + " Type is " + getObjectType(payload[key]));
+            type = getObjectType(payload[key]);
+            if (type === "List&lt;Object&gt;" || type == "Object") {
+                var newObjKey = key;
+                if (getObjectType(newObjKey) === "int") {
+                    newObjKey = objectDTO_Key + "DTO" + suffix;
+                }
+                fieldName = formulateFieldName(newObjKey, true) + "DTO" + suffix;
+                if (type == "Object") {
+                    if (getObjectType(key) === "int") {
+                        delete objectDTOs[objectDTO_Key];
+                        objectDTOs[objectDTO_Key] = payload[key];
+                        weaveContent(objectDTO_Key);
+                        break;
+                    } else {
+                        type = fieldName;
+                    }
+                } else {
+                    type = "List&lt;" + fieldName + "&gt;";
+                }
+                objectDTOs[fieldName] = payload[newObjKey];
+
+            }
+			if($.isNumeric(payload[key]) && jQuery.type(payload[key]) === "string"){
+				type = "String";
+			}
+			
+            classes[objectDTO_Key] += getField(key, type, serializationType);
+        }
+
+        delete objectDTOs[objectDTO_Key];
+
+        for (var o in objectDTOs) {
+            console.log("Pending to parse : " + o);
+        }
+
+        if (classes[objectDTO_Key].indexOf("BigDecimal") != -1) {
+            classes[objectDTO_Key] = classes[objectDTO_Key].replace("__bdecimal_replacement___", content_import_bigdecimal);
+        } else {
+            classes[objectDTO_Key] = classes[objectDTO_Key].replace("__bdecimal_replacement___<br>", "");
+        }
+
+        return classes[objectDTO_Key];
+    }
+
+	
+	
+    var toStringContent = "";
+    function toString(fieldName, isStart = false, isEnd = false) {
+        if (isStart) {
+            toStringContent += "override function toString() : String {" + content_newline;
+            toStringContent += "return " + content_newline;
+        }
+
+        toStringContent += ("\"\n * " + fieldName + " : \"" + fieldName + (isEnd ? "" : "+"))
+
+        if (isEnd) {
+            toStringContent += content_newline + "}";
+        }
+    }
+	
+	
+	
+	
+	function createFile(content){
+		$.ajax({
+			url:$("#serverlet_url").val(),
+			type:"POST",
+			data:{
+				"content":content,
+				"path":$("#dto_path").val()
+			},
+			success:function(data){
+				//alert(data);
+			},
+			error:function(data){
+				//alert("Error : "+data.responseText);
+			}
+		});
+	
+	
+	}
+	
+	$(".servlet_tr").hide();
+	function fileCreationEnableCheckbox(cb) {
+	  if(cb.checked){
+		$(".servlet_tr").show();
+		generatefile = true;
+	  }else{
+		$(".servlet_tr").hide();
+		generatefile = false;
+	  }
+	}
+</script>
+
+<style>
+    body {
+        background-color: #F6F6F6;
+    }
+    
+    body,
+    h1,
+    p {
+        font-family: "Helvetica Neue", "Segoe UI", Segoe, Helvetica, Arial, "Lucida Grande", sans-serif;
+        font-weight: normal;
+        margin: 0;
+        padding: 0;
+    }
+    
+    #gallery div {
+        background-color: #bbc;
+        color: #FFF;
+        text-align: center;
+        font-weight: bold;
+    }
+    
+    h1 {
+        font-size: 48px;
+        font-weight: 300;
+        margin: 0 0 5px 0;
+        text-align: center;
+    }
+    
+    a {
+        color: #3282e6;
+        text-decoration: none;
+    }
+</style>
+
